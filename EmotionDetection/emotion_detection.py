@@ -1,72 +1,93 @@
+"""
+Emotion detection module.
+
+This module sends user text to an emotion analysis API,
+processes the response, and returns structured emotion scores
+along with the dominant emotion.
+"""
+
 import requests
-import json
 
-def emotion_detector(text_to_analyse):
-    # Handle blank input
-    if not text_to_analyse or text_to_analyse.strip() == "":
-        return {
-            'anger': None,
-            'disgust': None,
-            'fear': None,
-            'joy': None,
-            'sadness': None,
-            'dominant_emotion': None
-        }
 
-    url = 'https://sn-watson-emotion.labs.skills.network/v1/watson.runtime.nlp.v1/NlpService/EmotionPredict'
-    myobj = { "raw_document": { "text": text_to_analyse } }
-    header = {"grpc-metadata-mm-model-id": "emotion_aggregated-workflow_lang_en_stock"}
+def emotion_detector(text_to_analyze):
+    """
+    Analyze emotions in the provided text.
+
+    Args:
+        text_to_analyze (str): The text input from the user.
+
+    Returns:
+        dict: A dictionary containing emotion scores and the dominant emotion.
+              If analysis fails, dominant_emotion will be None.
+    """
+
+    # API endpoint for emotion detection
+    url = "https://sn-watson-emotion.labs.skills.network/v1/watson.runtime.nlp.v1/NlpService/EmotionPredict"
+
+    # Required headers for the API request
+    headers = {"grpc-metadata-mm-model-id": "emotion_aggregated-workflow_lang_en_stock"}
+
+    # JSON payload sent to the API
+    payload = {"raw_document": {"text": text_to_analyze}}
 
     try:
-        response = requests.post(url, json=myobj, headers=header)
-    except Exception:
-        # In case the request fails
+        # Send POST request to the API
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+
+        # If API request fails, return safe fallback response
+        if response.status_code != 200:
+            return _empty_emotion_result()
+
+        # Parse JSON response
+        formatted_response = response.json()
+
+        # Extract emotion predictions
+        emotions = formatted_response["emotionPredictions"][0]["emotion"]
+
+        # Get individual emotion scores
+        anger = emotions["anger"]
+        disgust = emotions["disgust"]
+        fear = emotions["fear"]
+        joy = emotions["joy"]
+        sadness = emotions["sadness"]
+
+        # Determine dominant emotion (highest score)
+        emotion_scores = {
+            "anger": anger,
+            "disgust": disgust,
+            "fear": fear,
+            "joy": joy,
+            "sadness": sadness,
+        }
+        dominant_emotion = max(emotion_scores, key=emotion_scores.get)
+
+        # Return structured result
         return {
-            'anger': None,
-            'disgust': None,
-            'fear': None,
-            'joy': None,
-            'sadness': None,
-            'dominant_emotion': None
+            "anger": anger,
+            "disgust": disgust,
+            "fear": fear,
+            "joy": joy,
+            "sadness": sadness,
+            "dominant_emotion": dominant_emotion,
         }
 
-    # If server returns 400 or other error
-    if response.status_code != 200:
-        return {
-            'anger': None,
-            'disgust': None,
-            'fear': None,
-            'joy': None,
-            'sadness': None,
-            'dominant_emotion': None
-        }
+    except (requests.exceptions.RequestException, KeyError, ValueError):
+        # Catch network issues or unexpected API response structure
+        return _empty_emotion_result()
 
-    # Convert response text → dictionary
-    formatted_response = json.loads(response.text)
 
-    emotions = formatted_response["emotionPredictions"][0]["emotion"]
+def _empty_emotion_result():
+    """
+    Return a default result when emotion detection fails.
 
-    anger_score = emotions["anger"]
-    disgust_score = emotions["disgust"]
-    fear_score = emotions["fear"]
-    joy_score = emotions["joy"]
-    sadness_score = emotions["sadness"]
-
-    emotion_scores = {
-        "anger": anger_score,
-        "disgust": disgust_score,
-        "fear": fear_score,
-        "joy": joy_score,
-        "sadness": sadness_score
-    }
-
-    dominant_emotion = max(emotion_scores, key=emotion_scores.get)
-
+    Returns:
+        dict: Emotion scores set to None and no dominant emotion.
+    """
     return {
-        'anger': anger_score,
-        'disgust': disgust_score,
-        'fear': fear_score,
-        'joy': joy_score,
-        'sadness': sadness_score,
-        'dominant_emotion': dominant_emotion
+        "anger": None,
+        "disgust": None,
+        "fear": None,
+        "joy": None,
+        "sadness": None,
+        "dominant_emotion": None,
     }
